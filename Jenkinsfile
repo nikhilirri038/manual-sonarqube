@@ -8,8 +8,8 @@ pipeline {
 
         PATH = "${SONAR_SCANNER_HOME}/bin:${env.PATH}"
 
-        SONAR_PROJECT_KEY = 'nikhil-website'
-        SONAR_PROJECT_NAME = 'nikhil-website'
+        SONAR_PROJECT_KEY = 'nexus-website'
+        SONAR_PROJECT_NAME = 'nexus-website'
 
         DOCKER_IMAGE = 'manual-sonarqube:1.0'
         CONTAINER_NAME = 'manual-sonarqube-container'
