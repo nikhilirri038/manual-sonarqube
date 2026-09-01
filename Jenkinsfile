@@ -2,43 +2,44 @@ pipeline {
 
     agent any
 
+    tools {
+        sonarQube 'SonarScanner'
+    }
+
     environment {
         SONAR_PROJECT_KEY = 'nikhil-website'
         SONAR_PROJECT_NAME = 'nikhil-website'
 
         DOCKER_IMAGE = 'manual-sonarqube:1.0'
         CONTAINER_NAME = 'manual-sonarqube-container'
-
-        SONAR_TOKEN = credentials('sonar-token')
     }
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                echo 'Checking out source code...'
-
-                checkout scm
-            }
-        }
-
         stage('Verify Environment') {
             steps {
                 sh '''
-                    echo "Java version:"
+                    echo "================================"
+                    echo "Checking Environment"
+                    echo "================================"
+
+                    echo "Java:"
                     java -version
 
-                    echo "Node version:"
+                    echo "Node:"
                     node -v
 
-                    echo "NPM version:"
+                    echo "NPM:"
                     npm -v
 
-                    echo "Docker version:"
+                    echo "Docker:"
                     docker --version
 
-                    echo "Trivy version:"
+                    echo "Trivy:"
                     trivy --version
+
+                    echo "SonarScanner:"
+                    sonar-scanner --version
                 '''
             }
         }
@@ -46,14 +47,26 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
 
-                withSonarQubeEnv('SonarQube') {
+                withCredentials([
+                    string(
+                        credentialsId: 'sonar-token',
+                        variable: 'SONAR_TOKEN'
+                    )
+                ]) {
 
-                    sh '''
-                        sonar-scanner \
-                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                          -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-                          -Dsonar.sources=.
-                    '''
+                    withSonarQubeEnv('SonarQube') {
+
+                        sh '''
+                            echo "================================"
+                            echo "Running SonarQube Analysis"
+                            echo "================================"
+
+                            sonar-scanner \
+                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                              -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+                              -Dsonar.sources=.
+                        '''
+                    }
                 }
             }
         }
@@ -76,9 +89,12 @@ pipeline {
                     echo "Building Docker Image"
                     echo "================================"
 
-                    docker build -t ${DOCKER_IMAGE} .
+                    docker build \
+                      -t ${DOCKER_IMAGE} \
+                      .
 
-                    echo "Docker image built successfully"
+                    echo "Docker build completed successfully."
+
                     docker images | grep manual-sonarqube
                 '''
             }
@@ -132,15 +148,19 @@ pipeline {
     post {
 
         success {
-            echo '================================'
-            echo 'PIPELINE SUCCESS'
-            echo '================================'
+            echo '''
+================================
+PIPELINE SUCCESS
+================================
+'''
         }
 
         failure {
-            echo '================================'
-            echo 'PIPELINE FAILED'
-            echo '================================'
+            echo '''
+================================
+PIPELINE FAILED
+================================
+'''
         }
 
         always {
