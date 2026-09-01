@@ -2,11 +2,12 @@ pipeline {
 
     agent any
 
-    tools {
-        sonarQube 'SonarScanner'
-    }
-
     environment {
+
+        SONAR_SCANNER_HOME = tool 'SonarScanner'
+
+        PATH = "${SONAR_SCANNER_HOME}/bin:${env.PATH}"
+
         SONAR_PROJECT_KEY = 'nikhil-website'
         SONAR_PROJECT_NAME = 'nikhil-website'
 
@@ -18,6 +19,7 @@ pipeline {
 
         stage('Verify Environment') {
             steps {
+
                 sh '''
                     echo "================================"
                     echo "Checking Environment"
