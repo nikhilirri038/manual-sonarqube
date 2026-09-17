@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI-CD Pipeline
 
 on:
   push:
@@ -12,57 +12,90 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
 
+      # 1. Checkout source code
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. Verify environment
       - name: Verify Environment
         run: |
-          echo "================================"
-          echo "Checking Environment"
-          echo "================================"
+          echo "Checking environment..."
 
-          echo "Java:"
           java -version
-
-          echo "Node:"
           node -v
-
-          echo "NPM:"
           npm -v
-
-          echo "Docker:"
           docker --version
 
-      - name: Docker Build
-        run: |
-          echo "================================"
-          echo "Building Docker Image"
-          echo "================================"
+      # 3. Configure AWS
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
+      # 4. Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 5. Build Docker image
+      - name: Build Docker Image
+        run: |
           docker build \
             -t manual-sonarqube:1.0 \
             .
 
-          echo "Docker build completed successfully."
-
-          docker images
-
-      - name: Docker Run
+      # 6. Tag Docker image
+      - name: Tag Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          echo "================================"
-          echo "Running Docker Container"
-          echo "================================"
+          docker tag \
+            manual-sonarqube:1.0 \
+            $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest
 
-          docker run -d \
-            --name manual-sonarqube-container \
-            -p 8081:80 \
-            manual-sonarqube:1.0
+      # 7. Push image to ECR
+      - name: Push Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push \
+            $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:latest
 
-          echo "Container started successfully!"
+      # 8. Deploy to EC2
+      - name: Deploy to EC2
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > ec2-key.pem
+          chmod 600 ec2-key.pem
 
-          docker ps
+          ssh -o StrictHostKeyChecking=no \
+            -i ec2-key.pem \
+            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << EOF
+
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login \
+              --username AWS \
+              --password-stdin $ECR_REGISTRY
+
+            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+            docker rm -f manual-sonarqube-container 2>/dev/null || true
+
+            docker run -d \
+              --name manual-sonarqube-container \
+              -p 8081:80 \
+              $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+            docker ps
+
+          EOF
