@@ -1,0 +1,68 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Verify Environment
+        run: |
+          echo "================================"
+          echo "Checking Environment"
+          echo "================================"
+
+          echo "Java:"
+          java -version
+
+          echo "Node:"
+          node -v
+
+          echo "NPM:"
+          npm -v
+
+          echo "Docker:"
+          docker --version
+
+      - name: Docker Build
+        run: |
+          echo "================================"
+          echo "Building Docker Image"
+          echo "================================"
+
+          docker build \
+            -t manual-sonarqube:1.0 \
+            .
+
+          echo "Docker build completed successfully."
+
+          docker images
+
+      - name: Docker Run
+        run: |
+          echo "================================"
+          echo "Running Docker Container"
+          echo "================================"
+
+          docker run -d \
+            --name manual-sonarqube-container \
+            -p 8081:80 \
+            manual-sonarqube:1.0
+
+          echo "Container started successfully!"
+
+          docker ps
